@@ -1,0 +1,42 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Segreti e configurazione locale (tenere .env.example)
+.env
+.env.*
+!.env.example
+
+# IDE e editor
+.idea/
+.vscode/
+*.swp
+
+# Cache di tool
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Copertura e test
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Log e database locali
+*.log
+*.sqlite3
