@@ -1,10 +1,21 @@
+import hashlib
 from decimal import Decimal
 
-from sqlalchemy import func, select, Row
+from sqlalchemy import Row, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.db.models import ChatSession, ChatMessage
+from src.db.models import (
+    Account,
+    Card,
+    ChatMessage,
+    ChatSession,
+    ComplianceAlert,
+    Movement,
+    Transfer,
+)
+from src.types.account import AccountBalance
 
 
 class ChatRepository:
@@ -30,7 +41,7 @@ class ChatRepository:
         role: str,
         content: str,
         tokens: int = 0,
-        cost_eur: Decimal = Decimal("0"),
+        cost_eur: Decimal = Decimal(0),
         model_used: str | None = None,
     ) -> ChatMessage:
         msg = ChatMessage(
@@ -54,7 +65,6 @@ class ChatRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-from src.db.models import Account, Movement
 
 class AccountRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -89,3 +99,139 @@ class AccountRepository:
         )
         result = await self.session.execute(stmt)
         return result.first()
+
+
+class AccountAccess:
+    """I conti che QUESTO utente può leggere.
+
+    Il controllo di appartenenza sta dentro la query, insieme al calcolo del
+    saldo: non esiste un modo di chiedere un conto senza passare da qui.
+    """
+
+    SALDO = (
+        select(Account.iban, func.coalesce(func.sum(Movement.amount), 0).label("saldo"))
+        .outerjoin(Movement, Movement.account_iban == Account.iban)
+        .group_by(Account.iban)
+    )
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def of_user(self, username: str, account_id: str) -> AccountBalance | None:
+        stmt = self.SALDO.where(
+            Account.iban == account_id, Account.owner_id == username
+        )
+        riga = (await self.session.execute(stmt)).first()
+        return AccountBalance(iban=riga.iban, saldo=riga.saldo) if riga else None
+
+    async def posseduti(self, username: str) -> list[AccountBalance]:
+        stmt = self.SALDO.where(Account.owner_id == username).order_by(Account.iban)
+        righe = await self.session.execute(stmt)
+        return [AccountBalance(iban=r.iban, saldo=r.saldo) for r in righe]
+
+
+class MovementAccess:
+    """Ultimi movimenti di un conto, sempre che il conto sia dell'utente."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def recent(
+        self, username: str, account_id: str, limite: int = 5
+    ) -> list[Movement]:
+        stmt = (
+            select(Movement)
+            .join(Account, Account.iban == Movement.account_iban)
+            .where(Movement.account_iban == account_id, Account.owner_id == username)
+            .order_by(Movement.date.desc())
+            .limit(limite)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+
+class CardAccess:
+    """Le carte collegate a un conto di QUESTO utente.
+
+    La JOIN su accounts è il controllo d'accesso: senza un conto proprio non
+    si leggono nemmeno le carte, come per saldo e movimenti.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def per_conto(self, username: str, account_id: str) -> list[Card]:
+        stmt = (
+            select(Card)
+            .join(Account, Account.iban == Card.account_iban)
+            .where(Card.account_iban == account_id, Account.owner_id == username)
+            .order_by(Card.last4)
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+
+class TransferAccess:
+    """Un bonifico solo se partito da un conto di QUESTO utente."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def per_riferimento(
+        self, username: str, riferimento: str
+    ) -> Transfer | None:
+        stmt = (
+            select(Transfer)
+            .join(Account, Account.iban == Transfer.account_iban)
+            .where(Transfer.riferimento == riferimento, Account.owner_id == username)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+
+class AlertRepository:
+    """Scrive in compliance_alerts.
+
+    La chiave di idempotenza è deterministica: la stessa richiesta dello stesso
+    utente sulla stessa riga produce la stessa chiave, quindi la seconda
+    chiamata trova già la riga invece di crearne un'altra.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    @staticmethod
+    def chiave(autore: str, account_iban: str, motivo: str) -> str:
+        return hashlib.sha256(
+            f"{autore}|{account_iban}|{motivo}".encode()
+        ).hexdigest()
+
+    async def apri(
+        self, autore: str, motivo: str, account_iban: str
+    ) -> ComplianceAlert:
+        chiave = self.chiave(autore, account_iban, motivo)
+        gia_aperta = await self.session.scalar(
+            select(ComplianceAlert).where(ComplianceAlert.idempotency_key == chiave)
+        )
+        if gia_aperta is not None:
+            return gia_aperta
+
+        alert = ComplianceAlert(
+            account_iban=account_iban,
+            opened_by=autore,
+            reason=motivo,
+            idempotency_key=chiave,
+        )
+        self.session.add(alert)
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            # Un'altra richiesta ha inserito la stessa riga fra le due query.
+            await self.session.rollback()
+            trovata = await self.session.scalar(
+                select(ComplianceAlert).where(
+                    ComplianceAlert.idempotency_key == chiave
+                )
+            )
+            if trovata is None:
+                raise  # il vincolo ha risposto: la riga deve esserci
+            return trovata
+        return alert

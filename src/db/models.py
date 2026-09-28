@@ -83,3 +83,32 @@ class AppUser(Base):
     # Filiale di appartenenza: None = funzione centrale senza filiale propria.
     branch_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+class ComplianceAlert(Base):
+    __tablename__ = "compliance_alerts"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=gen_uuid)
+    account_iban: Mapped[str] = mapped_column(ForeignKey("accounts.iban"), index=True)
+    opened_by: Mapped[str] = mapped_column(String(64))       # username dal token
+    reason: Mapped[str] = mapped_column(Text)
+    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+class Card(Base):
+    __tablename__ = "cards"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=gen_uuid)
+    account_iban: Mapped[str] = mapped_column(ForeignKey("accounts.iban"), index=True)
+    last4: Mapped[str] = mapped_column(String(4))            # ultime 4 cifre, mai il PAN
+    tipo: Mapped[str] = mapped_column(String(32))            # debito | credito
+    stato: Mapped[str] = mapped_column(String(32))           # attiva | bloccata | da_attivare
+    limite: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+class Transfer(Base):
+    __tablename__ = "transfers"
+    # codice leggibile (TRF-2026-0001): è l'identificativo che il cliente cita allo sportello
+    riferimento: Mapped[str] = mapped_column(String(32), primary_key=True)
+    account_iban: Mapped[str] = mapped_column(ForeignKey("accounts.iban"), index=True)
+    destinatario: Mapped[str] = mapped_column(String(64))
+    importo: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    stato: Mapped[str] = mapped_column(String(32))           # accreditato | in_elaborazione | rifiutato
+    data: Mapped[datetime] = mapped_column(DateTime, nullable=False)

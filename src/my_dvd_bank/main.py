@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from src.api import account, advice, auth, categorize, chat, glossary, ingest
+from src.api import account, advice, agent, auth, categorize, chat, glossary, ingest
 from src.config import settings
 from src.exception import AppError
 
@@ -52,4 +52,5 @@ app.include_router(glossary.router)
 app.include_router(account.router)
 app.include_router(ingest.router)
 app.include_router(advice.router)
+app.include_router(agent.router)
 app.include_router(auth.router)

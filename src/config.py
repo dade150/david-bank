@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     min_similarity: float = 0.30
     jwt_secret: str
 
+    # Agente (Giorno 7): il loop parla col server opencode locale
+    # (stesso che usano chat e advice), con i modelli gratuiti inclusi.
+    agent_model: str = "opencode/mimo-v2.6-flash-free"
+    agent_max_steps: int = 6
+
 
 try:
     settings = Settings()
