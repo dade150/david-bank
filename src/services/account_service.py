@@ -30,8 +30,9 @@ class AccountService:
         if not risultato:
             raise AppError(404, "ACCOUNT_NOT_FOUND", f"Conto {iban} non trovato o senza movimenti")
 
+        iban_riga, numero_movimenti, totale_speso = risultato
         return TotalSpentResponse(
-            iban=risultato.iban,
-            numero_movimenti=risultato.numero_movimenti,
-            totale_speso=risultato.totale_speso
+            iban=iban_riga,
+            numero_movimenti=numero_movimenti,
+            totale_speso=totale_speso
         )

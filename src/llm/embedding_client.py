@@ -1,7 +1,7 @@
-from collections.abc import Callable
 from functools import lru_cache
-from typing import Any
+
 from sentence_transformers import SentenceTransformer
+
 
 @lru_cache(maxsize=1)
 def _get_model() -> SentenceTransformer:
@@ -9,7 +9,7 @@ def _get_model() -> SentenceTransformer:
 
 class EmbeddingClient:
     def __init__(self) -> None:
-        self._model: Callable[..., Any] = _get_model()
+        self._model = _get_model()
         self.dim = 384
 
     def _encode(self, texts: list[str]) -> list[list[float]]:

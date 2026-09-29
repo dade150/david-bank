@@ -1,8 +1,6 @@
-import hashlib
 from decimal import Decimal
 
 from sqlalchemy import Row, func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,7 +9,6 @@ from src.db.models import (
     Card,
     ChatMessage,
     ChatSession,
-    ComplianceAlert,
     Movement,
     Transfer,
 )
@@ -83,7 +80,7 @@ class AccountRepository:
         result = await self.session.execute(stmt)
         return list(result.all())
 
-    async def totale_speso(self, iban: str) -> tuple | None:
+    async def totale_speso(self, iban: str) -> tuple[str, int, Decimal] | None:
         """
         L'Aggregazione: Calcola il numero di movimenti e la somma totale spesa.
         """
@@ -98,7 +95,11 @@ class AccountRepository:
             .group_by(Account.iban)
         )
         result = await self.session.execute(stmt)
-        return result.first()
+        riga = result.first()
+        if riga is None:
+            return None
+        # la tupla esplicita: l'attributo su Row non è tipizzato, l'unpacking sì
+        return str(riga[0]), int(riga[1]), Decimal(riga[2])
 
 
 class AccountAccess:
@@ -185,53 +186,3 @@ class TransferAccess:
             .where(Transfer.riferimento == riferimento, Account.owner_id == username)
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
-
-
-class AlertRepository:
-    """Scrive in compliance_alerts.
-
-    La chiave di idempotenza è deterministica: la stessa richiesta dello stesso
-    utente sulla stessa riga produce la stessa chiave, quindi la seconda
-    chiamata trova già la riga invece di crearne un'altra.
-    """
-
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    @staticmethod
-    def chiave(autore: str, account_iban: str, motivo: str) -> str:
-        return hashlib.sha256(
-            f"{autore}|{account_iban}|{motivo}".encode()
-        ).hexdigest()
-
-    async def apri(
-        self, autore: str, motivo: str, account_iban: str
-    ) -> ComplianceAlert:
-        chiave = self.chiave(autore, account_iban, motivo)
-        gia_aperta = await self.session.scalar(
-            select(ComplianceAlert).where(ComplianceAlert.idempotency_key == chiave)
-        )
-        if gia_aperta is not None:
-            return gia_aperta
-
-        alert = ComplianceAlert(
-            account_iban=account_iban,
-            opened_by=autore,
-            reason=motivo,
-            idempotency_key=chiave,
-        )
-        self.session.add(alert)
-        try:
-            await self.session.commit()
-        except IntegrityError:
-            # Un'altra richiesta ha inserito la stessa riga fra le due query.
-            await self.session.rollback()
-            trovata = await self.session.scalar(
-                select(ComplianceAlert).where(
-                    ComplianceAlert.idempotency_key == chiave
-                )
-            )
-            if trovata is None:
-                raise  # il vincolo ha risposto: la riga deve esserci
-            return trovata
-        return alert

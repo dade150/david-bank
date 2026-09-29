@@ -8,14 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.db.repos import (
     AccountAccess,
-    AlertRepository,
     CardAccess,
     MovementAccess,
     TransferAccess,
 )
+from src.db.runs import RunRepository
 from src.db.session import get_db
 from src.llm.embedding_client import EmbeddingClient
 from src.llm.opencode_provider import OpencodeProvider
+from src.services.alerts import AlertService
 from src.services.retrieval_service import RetrievalService
 
 
@@ -28,7 +29,8 @@ class Deps:
     movements: MovementAccess
     cards: CardAccess
     transfers: TransferAccess
-    alerts: AlertRepository
+    alerts: AlertService
+    runs: RunRepository          # Giorno 8: dove un run sospeso aspetta
     retrieval: RetrievalService
     embedder: EmbeddingClient
     provider: OpencodeProvider
@@ -45,16 +47,27 @@ def _provider() -> OpencodeProvider:
     )
 
 
-def get_deps(db: Annotated[AsyncSession, Depends(get_db)]) -> Deps:
-    embedder = EmbeddingClient()
+def crea_deps(
+    db: AsyncSession,
+    *,
+    embedder: EmbeddingClient | None = None,
+    provider: OpencodeProvider | None = None,
+) -> Deps:
+    """I servizi su una sessione. La usano l'endpoint e, al Giorno 8, il server MCP."""
+    embedder = embedder or EmbeddingClient()      # uno solo per richiesta, usato da due
     return Deps(
         session=db,
         accounts=AccountAccess(db),
         movements=MovementAccess(db),
         cards=CardAccess(db),
         transfers=TransferAccess(db),
-        alerts=AlertRepository(db),
+        alerts=AlertService(db),
+        runs=RunRepository(db),
         retrieval=RetrievalService(db, embedder),
         embedder=embedder,
-        provider=_provider(),
+        provider=provider or _provider(),
     )
+
+
+def get_deps(db: Annotated[AsyncSession, Depends(get_db)]) -> Deps:
+    return crea_deps(db)

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.repos import ChatRepository
 from src.exception import ChatSessionNotFoundError
 from src.llm.client import LLMProvider
-from src.llm.types import Message
+from src.llm.llm_types import Message
 from src.types.chat import ChatRequest, ChatResponse
 
 
@@ -28,9 +28,10 @@ class ChatService:
         if req.session_id == "new":
             chat_session = await self.repo.create_session(user_id=user_id)
         else:
-            chat_session = await self.repo.find_session(req.session_id)
-            if chat_session is None:
+            trovata = await self.repo.find_session(req.session_id)
+            if trovata is None:
                 raise ChatSessionNotFoundError(req.session_id)
+            chat_session = trovata
 
         # La storia va letta PRIMA di aggiungere il messaggio nuovo
         history = await self.repo.list_messages(chat_session.id)

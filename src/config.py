@@ -1,4 +1,5 @@
 import sys
+from decimal import Decimal
 
 from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -34,17 +35,22 @@ class Settings(BaseSettings):
     agent_model: str = "opencode/mimo-v2.6-flash-free"
     agent_max_steps: int = 6
 
+    # Approvazioni (Giorno 8): sopra questa cifra un tool che scrive decide una persona.
+    # Non sta nel prompt né nel codice: sta qui, così cambia senza ripubblicare.
+    soglia_approvazione_eur: Decimal = Decimal(5000)
+
 
 try:
-    settings = Settings()
+    # i campi obbligatori (database_url, jwt_secret) arrivano dall'env: mypy non lo sa
+    settings = Settings()  # type: ignore[call-arg]
 except ValidationError as e:
     print("\n❌ Errore critico all'avvio: Configurazione mancante o errata.")
     print("Controlla il tuo file .env per questi campi:")
 
     for error in e.errors():
-        campo = error["loc"][0]
+        campo = str(error["loc"][0]).upper()
         messaggio = error["msg"]
-        print(f"  -> {campo.upper()}: {messaggio}")
+        print(f"  -> {campo}: {messaggio}")
 
     print("\nL'applicazione verrà terminata.\n")
     sys.exit(1)

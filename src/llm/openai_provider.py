@@ -1,6 +1,6 @@
 from openai import AsyncOpenAI
 
-from src.llm.types import LLMResponse, Message
+from src.llm.llm_types import LLMResponse, Message
 
 # USD per 1M token (input, output) — https://openai.com/api/pricing/
 PRICING: dict[str, tuple[float, float]] = {

@@ -3,7 +3,7 @@ import base64
 from opencode_ai import AsyncOpencode
 from opencode_ai.types import TextPartInputParam
 
-from src.llm.types import LLMResponse, Message
+from src.llm.llm_types import LLMResponse, Message
 
 
 class OpencodeProvider:
@@ -36,7 +36,12 @@ class OpencodeProvider:
                 f"{self.username}:{self.password}".encode()
             ).decode()
             headers["Authorization"] = f"Basic {token}"
-        return AsyncOpencode(base_url=self.base_url, default_headers=headers)
+        # il default del SDK è 60s: con sei tool in ballo e la conversazione
+        # che cresce a ogni passo, il modello ci mette di più e la richiesta
+        # muore in mezzo a un run
+        return AsyncOpencode(
+            base_url=self.base_url, default_headers=headers, timeout=180.0
+        )
 
     async def complete(
         self, messages: list[Message], max_tokens: int = 500

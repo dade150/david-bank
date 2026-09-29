@@ -2,7 +2,7 @@ from pathlib import Path
 
 from src.llm.client import LLMProvider
 from src.llm.embedding_client import EmbeddingClient
-from src.llm.types import Message
+from src.llm.llm_types import Message
 from src.services.retrieval_service import RetrievalService
 from src.types.advice import AdviceRequest, AdviceResponse, Citation
 

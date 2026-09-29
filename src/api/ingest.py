@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import delete, func, select
+from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import DocumentChunk
@@ -38,7 +38,9 @@ async def ingest_document(
 async def reset_documents(db: AsyncSession = Depends(get_db)) -> dict:
     result = await db.execute(delete(DocumentChunk))
     await db.commit()
-    return {"deleted_rows": result.rowcount or 0}
+    # rowcount esiste su CursorResult, non su Result in generale
+    deleted = result.rowcount if isinstance(result, CursorResult) else 0
+    return {"deleted_rows": deleted or 0}
 
 
 @router.get(

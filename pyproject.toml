@@ -12,6 +12,7 @@ dependencies = [
     "anthropic>=1.8.0",
     "asyncpg>=0.31.0",
     "fastapi>=0.141.1",
+    "fastmcp==4.0.10",
     "instructor>=1.17.0",
     "openai>=3.3.0",
     "opencode-ai>=0.1.0a36",
@@ -40,3 +41,14 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.8",
 ]
+
+[tool.ruff.lint]
+# B008: `Depends(...)` negli argomenti è l'idioma di FastAPI, non un errore.
+ignore = ["B008"]
+
+[tool.mypy]
+# Senza __init__.py nelle cartelle, mypy tratta src/api/auth.py e
+# src/auth/__init__.py come due moduli "auth" omonimi. I package bases
+# esplicite fanno da radice e i nomi diventano src.api.auth / src.auth.
+explicit_package_bases = true
+namespace_packages = true

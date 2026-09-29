@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from src.llm.types import LLMResponse, Message
+from src.llm.llm_types import LLMResponse, Message
 
 
 class LLMProvider(Protocol):
