@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     max_tokens_per_request: int = 2000
     min_similarity: float = 0.30
     jwt_secret: str
+    redis_url: str = ""
 
     # Agente (Giorno 7): il loop parla col server opencode locale
     # (stesso che usano chat e advice), con i modelli gratuiti inclusi.
